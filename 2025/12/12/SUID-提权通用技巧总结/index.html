@@ -1,0 +1,336 @@
+<!DOCTYPE HTML>
+<html>
+<head>
+  <meta charset="utf-8">
+  <meta http-equiv="pragma" content="no-cache">
+  <meta http-equiv="cache-control" content="no-cache">
+  <meta http-equiv="expires" content="0">
+  
+  <title>SUID 提权通用技巧总结 | crisis&#39;s blog</title>
+  <meta name="author" content="crisis">
+  
+  <meta name="description" content="suid出现地方：（overthewire）19 → 20：最纯粹的 SUID 提权
+23 → 24：SUID 通过 cron 间接触发通过写入 &amp;#x2F;var&amp;#x2F;spool&amp;#x2F;… 的脚本来让 cron 代你执行
+26 → 27：SUID 程序，但限制更多你可以用 strings 看出suid文件的限制权限strings &amp;#x2F;usr&amp;#x2F;bin&amp;#x2F;bandit27-do
+Usage: bandit27-do Allowed commands: cat
+危险定级：🟥 Bandit 19 → 20行为：提供一个 SUID 程序 bandit20-do，允许以 bandit20 身份执行几乎任意命令。
+漏洞类型：
+SUID 任意命令执行（典型的 Privilege Escalation 漏洞）
+属于 不安全的 SUID 程序设计。
+风险分级：
+高危（🟥）"> 
+  
+  
+  <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1">
+
+  <meta property="og:title" content="SUID 提权通用技巧总结"/>
+  <meta property="og:site_name" content="crisis&#39;s blog"/>
+
+  
+    <meta property="og:image" content=""/>
+  
+
+  
+    <link rel="alternative" href="/atom.xml" title="crisis&#39;s blog" type="application/atom+xml">
+  
+  
+    <link href="/favicon.png" rel="icon">
+  
+  
+  <link rel="stylesheet" href="/css/bootstrap.min.css" media="screen" type="text/css">
+  <link rel="stylesheet" href="/css/font-awesome.css" media="screen" type="text/css">
+  <link rel="stylesheet" href="/css/style.css" media="screen" type="text/css">
+  <link rel="stylesheet" href="/css/responsive.css" media="screen" type="text/css">
+  <link rel="stylesheet" href="/css/highlight.css" media="screen" type="text/css">
+  <link rel="stylesheet" href="/css/prism.css" media="screen" type="text/css">
+  <link rel="stylesheet" href="/css/google-fonts.css" media="screen" type="text/css">
+  <!--[if lt IE 9]><script src="//html5shiv.googlecode.com/svn/trunk/html5.js"></script><![endif]-->
+
+  <script src="/js/jquery-2.0.3.min.js"></script>
+
+  <!-- analytics -->
+  
+  <!-- Global site tag (gtag.js) - Google Analytics -->
+<script async src="https://www.googletagmanager.com/gtag/js?id=UA-70812759-1"></script>
+<script>
+  window.dataLayer = window.dataLayer || [];
+  function gtag(){dataLayer.push(arguments);}
+  gtag('js', new Date());
+
+  gtag('config', 'UA-70812759-1');
+</script>
+
+
+
+
+
+
+<meta name="generator" content="Hexo 7.3.0"></head>
+
+ <body>  
+  <nav id="main-nav" class="navbar navbar-inverse navbar-fixed-top" role="navigation">
+    <div class="container">
+      <button type="button" class="navbar-header navbar-toggle" data-toggle="collapse" data-target=".navbar-collapse">
+		<span class="sr-only">Toggle navigation</span>
+        <span class="icon-bar"></span>
+        <span class="icon-bar"></span>
+        <span class="icon-bar"></span>
+      </button>
+	  <a class="navbar-brand" href="/">crisis&#39;s blog</a>
+      <div class="collapse navbar-collapse nav-menu">
+		<ul class="nav navbar-nav">
+		  
+		  <li>
+			<a href="/archives" title="All the articles.">
+			  <i class=""></i>Archives
+			</a>
+		  </li>
+		  
+		  <li>
+			<a href="/categories" title="All the categories.">
+			  <i class=""></i>Categories
+			</a>
+		  </li>
+		  
+		  <li>
+			<a href="/tags" title="All the tags.">
+			  <i class=""></i>Tags
+			</a>
+		  </li>
+		  
+		  <li>
+			<a href="/about" title="About me.">
+			  <i class=""></i>About
+			</a>
+		  </li>
+		  
+		  <li>
+			<a href="/atom.xml" title="Subscribe me.">
+			  <i class=""></i>RSS
+			</a>
+		  </li>
+		  
+		</ul>
+      </div>
+    </div> <!-- container -->
+</nav>
+<div class="clearfix"></div>
+
+  <div class="container">
+  	<div class="content">
+    	 
+
+
+	
+		<div class="page-header">
+			<h1> SUID 提权通用技巧总结</h1>
+		</div>
+	
+
+
+
+<div class="row post">
+	<!-- cols -->
+	
+	<div id="top_meta"></div>
+	<div class="col-md-9">
+	
+
+	<!-- content -->
+	<div class="mypage">		
+	  		
+
+	  <p>suid出现地方：（overthewire）<br>19 → 20：最纯粹的 SUID 提权</p>
+<p>23 → 24：SUID 通过 cron 间接触发<br>通过写入 &#x2F;var&#x2F;spool&#x2F;… 的脚本来让 cron 代你执行</p>
+<p>26 → 27：SUID 程序，但限制更多<br>你可以用 strings 看出suid文件的限制权限<br>strings &#x2F;usr&#x2F;bin&#x2F;bandit27-do</p>
+<p>Usage: bandit27-do <command><br>Allowed commands: cat</p>
+<p>危险定级：<br>🟥 Bandit 19 → 20<br>行为：提供一个 SUID 程序 bandit20-do，允许以 bandit20 身份执行几乎任意命令。</p>
+<p>漏洞类型：</p>
+<p>SUID 任意命令执行（典型的 Privilege Escalation 漏洞）</p>
+<p>属于 不安全的 SUID 程序设计。</p>
+<p>风险分级：</p>
+<p>高危（🟥）</p>
+<p>因为它直接允许用户以更高权限执行任意命令，几乎等于“送你提权”。</p>
+<p>🟧 Bandit 23 → 24<br>行为：通过 cron 任务以 bandit24 身份执行脚本，用户可以写入脚本并间接获得 bandit24 的权限。</p>
+<p>漏洞类型：</p>
+<p>SUID + Cron Job 不安全配置</p>
+<p>属于 不安全的计划任务执行漏洞（间接提权）。</p>
+<p>风险分级：</p>
+<p>中高危（🟧）</p>
+<p>因为用户不能直接运行 SUID 程序，但可以通过 cron 的 SUID 行为间接提权。风险依赖于 cron 配置。</p>
+<p>🟨 Bandit 26 → 27<br>行为：提供一个 SUID 程序 bandit27-do，但它只允许执行特定命令（如 cat）。</p>
+<p>漏洞类型：</p>
+<p>受限 SUID 程序</p>
+<p>属于 功能受限的 SUID 提权漏洞。</p>
+<p>虽然有限制，但依然能读取敏感文件。</p>
+<p>风险分级：</p>
+<p>中危（🟨）</p>
+<p>因为它不是万能执行器，只能执行特定命令，但依然能泄露敏感数据。</p>
+<p>SUID 提权通用技巧总结图：<br>┌──────────────────────────────────────────────────────────────┐<br>│                     🟥 1. 识别 SUID 文件                      │<br>├──────────────────────────────────────────────────────────────┤<br>│ 查找系统中所有 SUID 程序：                                    │<br>│   find &#x2F; -perm -4000 -type f 2&gt;&#x2F;dev&#x2F;null                      │<br>│ 常见高危 SUID：                                               │<br>│   &#x2F;usr&#x2F;bin&#x2F;passwd, &#x2F;usr&#x2F;bin&#x2F;sudo, &#x2F;bin&#x2F;bash, &#x2F;usr&#x2F;bin&#x2F;find    │<br>└──────────────────────────────────────────────────────────────┘</p>
+<p>┌──────────────────────────────────────────────────────────────┐<br>│                     🟧 2. 分析 SUID 程序行为                  │<br>├──────────────────────────────────────────────────────────────┤<br>│ 关键问题：                                                    │<br>│   ✅ 是否允许执行任意命令？                                   │<br>│   ✅ 是否只允许特定命令？                                     │<br>│   ✅ 是否调用外部程序？                                       │<br>│   ✅ 是否依赖 PATH？                                          │<br>│ 工具：                                                        │<br>│   strings <file>                                              │<br>│   ltrace <file>                                               │<br>│   strace <file>                                               │<br>└──────────────────────────────────────────────────────────────┘</p>
+<p>┌──────────────────────────────────────────────────────────────┐<br>│                     🟨 3. PATH 劫持（经典技巧）               │<br>├──────────────────────────────────────────────────────────────┤<br>│ 如果 SUID 程序调用外部命令（如 cp、ls、cat）：                │<br>│   export PATH&#x3D;.:$PATH                                         │<br>│   echo “&#x2F;bin&#x2F;bash” &gt; cp                                       │<br>│   chmod +x cp                                                  │<br>│ 运行 SUID 程序 → 获得高权限 shell                             │<br>└──────────────────────────────────────────────────────────────┘</p>
+<p>┌──────────────────────────────────────────────────────────────┐<br>│                     🟩 4. 环境变量劫持                        │<br>├──────────────────────────────────────────────────────────────┤<br>│ 某些 SUID 程序会信任环境变量：                                │<br>│   LD_PRELOAD                                                   │<br>│   LD_LIBRARY_PATH                                              │<br>│   PYTHONPATH                                                   │<br>│   PERL5LIB                                                     │<br>│ 如果未被清理，可注入恶意库获得高权限                          │<br>└──────────────────────────────────────────────────────────────┘</p>
+<p>┌──────────────────────────────────────────────────────────────┐<br>│                     🟦 5. 利用可控输入&#x2F;文件                   │<br>├──────────────────────────────────────────────────────────────┤<br>│ SUID 程序如果读取你可控的文件：                               │<br>│   ✅ 配置文件                                                  │<br>│   ✅ 临时文件                                                  │<br>│   ✅ 日志文件                                                  │<br>│ 可尝试注入命令或替换文件内容                                  │<br>└──────────────────────────────────────────────────────────────┘</p>
+<p>┌──────────────────────────────────────────────────────────────┐<br>│                     🟪 6. 利用 SUID + 解释器                  │<br>├──────────────────────────────────────────────────────────────┤<br>│ 如果 SUID 程序调用：                                          │<br>│   python                                                      │<br>│   perl                                                        │<br>│   ruby                                                        │<br>│   awk                                                         │<br>│   find -exec                                                  │<br>│ 可直接获得高权限 shell：                                      │<br>│   python -c ‘import os; os.setuid(0); os.system(“&#x2F;bin&#x2F;bash”)’ │<br>└──────────────────────────────────────────────────────────────┘</p>
+<p>┌──────────────────────────────────────────────────────────────┐<br>│                     ⬛ 7. SUID 程序限制判断法                 │<br>├──────────────────────────────────────────────────────────────┤<br>│ ✅ 能执行任意命令 → 无限制（如 Bandit 19→20）                 │<br>│ ✅ 只能执行特定命令 → 有限制（如 Bandit 26→27）               │<br>│ ✅ 不能直接运行 → 间接 SUID（如 Bandit 23→24）                │<br>└──────────────────────────────────────────────────────────────┘</p>
+<p>┌──────────────────────────────────────────────────────────────┐<br>│                     ⭐ 8. 最终目标：读取敏感文件              │<br>├──────────────────────────────────────────────────────────────┤<br>│ 常见敏感文件：                                                │<br>│   &#x2F;etc&#x2F;shadow                                                 │<br>│   &#x2F;etc&#x2F;passwd                                                 │<br>│   &#x2F;root&#x2F;flag.txt                                              │<br>│   &#x2F;etc&#x2F;bandit_pass&#x2F;<user>                                     │<br>└──────────────────────────────────────────────────────────────┘</p>
+<p>SUID 提权漏洞速查表（常见可利用程序）：<br>┌──────────────────────────────────────────────────────────────┐<br>│                 🟥 最高危（几乎必定可提权）                  │<br>│        一旦带 SUID，几乎等于“直接送你 root”                 │<br>├──────────────────────────────────────────────────────────────┤<br>│ 程序           | 风险机制（概念性说明）                      │<br>│—————-+———————————————-│<br>│ bash           | 允许以程序所有者身份运行 shell              │<br>│ sh             | 同上                                         │<br>│ python         | 解释器可执行系统命令                         │<br>│ perl           | 同上                                         │<br>│ ruby           | 同上                                         │<br>│ lua            | 同上                                         │<br>│ find           | 可执行外部命令                               │<br>│ awk            | 可执行外部命令                               │<br>│ vim &#x2F; vi       | 编辑器可执行外部命令                         │<br>│ less &#x2F; more    | 可执行外部命令                               │<br>│ tar            | 特定参数可触发外部命令                       │<br>│ cp &#x2F; mv        | 若调用外部命令可能受 PATH 影响               │<br>└──────────────────────────────────────────────────────────────┘</p>
+<p>┌──────────────────────────────────────────────────────────────┐<br>│                 🟧 高危（常见于 CTF，容易利用）               │<br>├──────────────────────────────────────────────────────────────┤<br>│ 程序           | 风险机制（概念性说明）                      │<br>│—————-+———————————————-│<br>│ env            | 可调用外部程序                               │<br>│ nice           | 可调用外部程序                               │<br>│ time           | 可调用外部程序                               │<br>│ tee            | 可写入文件（可能覆盖敏感文件）               │<br>│ nano &#x2F; pico    | 编辑器可执行外部命令                         │<br>│ openssl        | 某些模式可调用外部程序                       │<br>│ nmap（旧版）   | 交互模式可执行命令                           │<br>│ git            | 帮助系统可触发外部命令                       │<br>└──────────────────────────────────────────────────────────────┘</p>
+<p>┌──────────────────────────────────────────────────────────────┐<br>│                 🟨 中危（需要技巧或特定条件）                │<br>├──────────────────────────────────────────────────────────────┤<br>│ 程序           | 风险机制（概念性说明）                      │<br>│—————-+———————————————-│<br>│ passwd         | 若路径可控可能覆盖敏感文件                  │<br>│ mount&#x2F;umount   | 可挂载伪造文件系统                           │<br>│ chown&#x2F;chmod    | 若路径可控可能修改敏感文件权限              │<br>│ scp &#x2F; rsync    | 可能调用外部命令                             │<br>│ tcpdump        | 特定参数可触发脚本执行                       │<br>│ journalctl     | 可执行外部命令                               │<br>└──────────────────────────────────────────────────────────────┘</p>
+<p>┌──────────────────────────────────────────────────────────────┐<br>│                 🟩 低危（特定版本或配置才可利用）            │<br>├──────────────────────────────────────────────────────────────┤<br>│ 程序           | 风险机制（概念性说明）                      │<br>│—————-+———————————————-│<br>│ man            | 某些版本可执行外部命令                      │<br>│ ftp &#x2F; sftp     | 某些版本可执行外部命令                      │<br>│ gdb            | 调试器可执行外部命令                        │<br>│ lesspipe       | 可能调用外部程序                            │<br>│ cups &#x2F; lp      | 打印过滤器可能执行外部程序                  │<br>└──────────────────────────────────────────────────────────────┘</p>
+<p>SUID 程序安全审计 Checklist：<br>┌──────────────────────────────────────────────────────────────┐<br>│ 🟥 1. 基础信息收集                                            │<br>├──────────────────────────────────────────────────────────────┤<br>│ [ ] 是否为 SUID（-rwsr-xr-x）                                 │<br>│ [ ] 所属用户（root &#x2F; 特定用户）                               │<br>│ [ ] 所属组                                                    │<br>│ [ ] 文件路径是否异常（如 &#x2F;tmp、用户目录）                     │<br>│ [ ] 文件是否为系统默认组件                                    │<br>│ [ ] 是否为自定义编译程序                                      │<br>└──────────────────────────────────────────────────────────────┘</p>
+<p>┌──────────────────────────────────────────────────────────────┐<br>│ 🟧 2. 程序行为分析                                            │<br>├──────────────────────────────────────────────────────────────┤<br>│ [ ] 是否执行外部命令（system &#x2F; exec &#x2F; popen）                │<br>│ [ ] 是否使用解释器（python &#x2F; perl &#x2F; bash）                   │<br>│ [ ] 是否读取用户可控的文件                                   │<br>│ [ ] 是否写入用户可控的文件                                   │<br>│ [ ] 是否依赖环境变量                                         │<br>│ [ ] 是否依赖 PATH                                            │<br>│ [ ] 是否使用临时文件（&#x2F;tmp）                                 │<br>│ [ ] 是否使用网络功能                                         │<br>│ [ ] 是否使用 setuid()&#x2F;setgid()                               │<br>└──────────────────────────────────────────────────────────────┘</p>
+<p>┌──────────────────────────────────────────────────────────────┐<br>│ 🟨 3. 外部命令调用检查（高危）                                │<br>├──────────────────────────────────────────────────────────────┤<br>│ [ ] 是否使用绝对路径（如 &#x2F;bin&#x2F;ls）                           │<br>│ [ ] 是否使用相对路径（如 ls）                                │<br>│ [ ] 是否使用用户输入拼接命令                                 │<br>│ [ ] 是否使用 shell（system() &#x2F; popen()）                     │<br>│ [ ] 是否存在命令注入风险                                     │<br>│ → 风险等级：高                                               │<br>└──────────────────────────────────────────────────────────────┘</p>
+<p>┌──────────────────────────────────────────────────────────────┐<br>│ 🟩 4. 环境变量依赖检查                                        │<br>├──────────────────────────────────────────────────────────────┤<br>│ [ ] PATH                                                     │<br>│ [ ] LD_PRELOAD（通常被忽略，但需确认）                       │<br>│ [ ] LD_LIBRARY_PATH                                          │<br>│ [ ] PYTHONPATH                                               │<br>│ [ ] PERL5LIB                                                 │<br>│ [ ] EDITOR &#x2F; PAGER                                           │<br>│ [ ] TMPDIR                                                   │<br>│ → 风险等级：中高                                             │<br>└──────────────────────────────────────────────────────────────┘</p>
+<p>┌──────────────────────────────────────────────────────────────┐<br>│ 🟦 5. 文件操作检查                                            │<br>├──────────────────────────────────────────────────────────────┤<br>│ [ ] 读取用户可控文件                                         │<br>│ [ ] 写入用户可控文件                                         │<br>│ [ ] 覆盖敏感文件（如 &#x2F;etc&#x2F;passwd）                           │<br>│ [ ] 使用固定文件名（可能被替换）                             │<br>│ [ ] 使用 &#x2F;tmp（可能被符号链接攻击）                          │<br>│ [ ] 使用不安全权限创建文件                                   │<br>│ → 风险等级：中高                                             │<br>└──────────────────────────────────────────────────────────────┘</p>
+<p>┌──────────────────────────────────────────────────────────────┐<br>│ 🟪 6. 输入验证检查                                            │<br>├──────────────────────────────────────────────────────────────┤<br>│ [ ] 接受用户输入                                             │<br>│ [ ] 对输入进行严格校验                                       │<br>│ [ ] 对输入进行过滤                                           │<br>│ [ ] 对输入进行长度限制                                       │<br>│ [ ] 使用不安全函数（如 gets、strcpy）                        │<br>│ → 风险等级：中                                               │<br>└──────────────────────────────────────────────────────────────┘</p>
+<p>┌──────────────────────────────────────────────────────────────┐<br>│ ⬛ 7. 逻辑漏洞检查                                            │<br>├──────────────────────────────────────────────────────────────┤<br>│ [ ] 允许用户绕过权限检查                                     │<br>│ [ ] 允许用户执行未预期功能                                   │<br>│ [ ] 存在 race condition（TOCTOU）                            │<br>│ [ ] 存在 symlink 攻击点                                      │<br>│ [ ] 存在不安全默认行为                                       │<br>│ → 风险等级：中                                               │<br>└──────────────────────────────────────────────────────────────┘</p>
+<p>┌──────────────────────────────────────────────────────────────┐<br>│ 🟫 8. 程序依赖检查                                            │<br>├──────────────────────────────────────────────────────────────┤<br>│ [ ] 外部库                                                   │<br>│ [ ] 配置文件                                                 │<br>│ [ ] 插件                                                     │<br>│ [ ] 脚本                                                     │<br>│ [ ] 其他可控资源                                             │<br>│ → 风险等级：中                                               │<br>└──────────────────────────────────────────────────────────────┘</p>
+<p>┌──────────────────────────────────────────────────────────────┐<br>│ 🟩 9. 运行时行为分析                                          │<br>├──────────────────────────────────────────────────────────────┤<br>│ [ ] 使用 strings 查看可疑字符串                              │<br>│ [ ] 使用 ltrace 查看库调用                                   │<br>│ [ ] 使用 strace 查看系统调用                                 │<br>│ [ ] 检查是否调用外部程序                                     │<br>│ [ ] 检查是否访问敏感文件                                     │<br>└──────────────────────────────────────────────────────────────┘</p>
+
+	  <div class="article-footer-copyright">
+
+    本博客采用 <a href="https://creativecommons.org/licenses/by-nc-sa/4.0/deed.zh" target="_blank">知识共享署名-非商业性使用-相同方式共享 4.0 国际许可协议(CC BY-NC-SA 4.0) 发布.</a>
+</div>
+
+	</div>
+
+	
+	
+	<div>
+  	<center>
+
+	<div class="pagination">
+
+    
+    
+    <a href="/2025/12/12/ssh远程连接加速/" type="button" class="btn btn-default"><i
+                class="fa fa-arrow-circle-o-left"></i> Prev</a>
+    
+
+    <a href="/" type="button" class="btn btn-default"><i class="fa fa-home"></i>Home</a>
+    
+    <a href="/2025/12/08/从算法景观中醒来：数字时代的主体性重建/" type="button" class="btn btn-default ">Next<i
+                class="fa fa-arrow-circle-o-right"></i></a>
+    
+
+    
+</div>
+
+
+    </center>
+	</div>
+	
+	<!-- comment -->
+	<!--
+<section id="comment">
+    <h2 class="title">Comments</h2>
+
+    
+</section>
+
+-->
+	
+	
+	
+	</div> <!-- col-md-9/col-md-12 -->
+
+
+	
+	<div id="side_meta">
+		<div class="col-md-3" id="post_meta"> 
+
+	<!-- date -->
+	
+	<div class="meta-widget">
+	<i class="fa fa-clock-o"></i>
+	2025-12-12 
+	</div>
+	
+
+	<!-- categories -->
+    
+	<div class="meta-widget">
+	<a data-toggle="collapse" data-target="#categorys"><i class="fa fa-folder"></i></a>	
+    <ul id="categorys" class="tag_box list-unstyled collapse in">
+          
+  <li>
+    <li><a href="/categories/网络安全/">网络安全<span>1</span></a></li>
+  </li>
+
+    </ul>
+	</div>
+	
+
+	<!-- tags -->
+		
+
+	<!-- toc -->
+	<div class="meta-widget">
+	
+	</div>
+	
+    <hr>
+	
+</div><!-- col-md-3 -->
+
+		
+
+	</div>
+	
+		
+
+</div><!-- row -->
+
+<!--
+ -->
+
+
+
+	</div>
+  </div>
+  <div class="container-narrow">
+  <footer> <p>
+  
+  &copy; 2026 crisis's Blog
+  
+      powered by <a href="http://hexo.io/" target="_blank">Hexo</a>.Theme <a href="https://github.com/Ares-X/hexo-theme-freemind.bithack" target="_blank">freemind.bithack</a>  
+</p>
+ </footer>
+</div> <!-- container-narrow -->
+  
+
+
+  
+<a id="gotop" href="#">   
+  <span>⬆︎TOP</span>
+</a>
+
+<script src="/js/jquery.imagesloaded.min.js"></script>
+<script src="/js/gallery.js"></script>
+<script src="/js/bootstrap.min.js"></script>
+<script src="/js/main.js"></script>
+<script src="/js/search.js"></script> 
+
+
+<link rel="stylesheet" href="/fancybox/jquery.fancybox.css" media="screen" type="text/css">
+<script src="/fancybox/jquery.fancybox.pack.js"></script>
+<script type="text/javascript">
+(function($){
+  $('.fancybox').fancybox();
+})(jQuery);
+</script>
+
+
+
+   <script type="text/javascript">      
+     var search_path = "search.xml";
+	 if (search_path.length == 0) {
+	 	search_path = "search.xml";
+	 }
+	 var path = "/" + search_path;
+     searchFunc(path, 'local-search-input', 'local-search-result');
+   </script>
+
+</body>
+   </html>
